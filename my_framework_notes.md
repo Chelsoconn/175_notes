@@ -1,3 +1,5 @@
+
+
 **Project**
 
 - A collection of files used to develop, test, build, and distribute software
@@ -528,12 +530,101 @@ rbenv local 3.2.2
 
 **Testing Sinatra Applications**
 
+1. Add `minitest` and `rack-test` to the project's `Gemfile` and run `bundle install` to install them.
+2. Create a `test` directory within the project. Inside that directory, create a file called `cms_test.rb` and add to it any testing setup code.
+3. Write a test that performs a `GET` request to `/` and validates the response has a successful response and contains the names of the three documents.
+4. Write a test that performs a `GET` request to `/history.txt` (or another document of your choosing) and validates the response is successful and contains some of the content of that document.
+
 - Since Sinatra builds on top of the [Rack](http://chneukirchen.org/blog/archive/2007/02/introducing-rack.html) library, testing Sinatra applications can take advantage of the [Rack::Test](https://github.com/brynary/rack-test)library for testing Rack applications.
+
 - Write tests to prevent regression
+
 - Minitest is Ruby's default testing library (DSL)
+
 - **Test Suite:** this is the entire set of tests that accompanies your program or application. You can think of this as *all the tests* for a project.
+
 - **Test:** this describes a situation or context in which tests are run. For example, this test is about making sure you get an error message after trying to log in with the wrong password. A test can contain multiple assertions.
+
 - **Assertion:** this is the actual verification step to confirm that the data returned by your program or application is indeed what is expected. You make one or more assertions within a test.
+
+  - `assert_equal` takes two parameters: the first is the expected value, and the second is the test or actual value.
+
+- `test/app_test.rb`
+
+  - Make a request to your application.
+
+    Use `get`, `post`, or other HTTP-method named methods.
+
+  - Access the response.
+
+    The response to your request will be accessible using `last_response`. This method will return an instance of `Rack::MockResponse`. Instances of this class provide `status`, `body`, and `[]` methods for accessing their status code, body, and headers, respectively.
+
+  - Make assertions against values in the response.
+
+    Use the standard assertions supplied by `Minitest`.
+
+  - Run `bundle exec ruby test/app_test.rb`
+
+```
+ENV["RACK_ENV"] = "test"
+
+require "minitest/autorun"
+require "rack/test"
+
+require_relative "../app"
+
+class AppTest < Minitest::Test
+  include Rack::Test::Methods
+
+  def app
+    Sinatra::Application
+  end
+
+  def test_index
+    get "/"
+    assert_equal 200, last_response.status
+    assert_equal "text/html;charset=utf-8", last_response["Content-Type"]
+    assert_equal "Hello, world!", last_response.body
+  end
+end
+```
+
+| Assertion                          | Description                                 |
+| :--------------------------------- | :------------------------------------------ |
+| `assert(test)`                     | Fails unless `test` is truthy.              |
+| `assert_equal(exp, act)`           | Fails unless `exp == act`.                  |
+| `assert_nil(obj)`                  | Fails unless `obj` is `nil`.                |
+| `assert_raises(*exp) { ... }`      | Fails unless block raises one of `*exp`.    |
+| `assert_instance_of(cls, obj)`     | Fails unless `obj` is an instance of `cls`. |
+| `assert_includes(collection, obj)` | Fails unless `collection` includes `obj`.   |
+
+- When we use `assert_equal`, we are testing for *value equality*. Specifically, we're invoking the `==` method on the object. If we're looking for more strict *object equality*, then we need to use the `assert_same` assertion.
+
+  - We can define an `==` method in main file to clarify `assert_equal`
+
+    - ```
+        def ==(other)                    
+          other.is_a?(Car) && name == other.name
+        end
+      ```
+
+- SEAT 
+
+  - Set up the necessary objects.
+
+    - ```
+        def setup   #In test file to have @car accessible through test
+          @car = Car.new
+        end
+      ```
+
+  - Execute the code against the object we're testing.
+
+  - Assert that the executed code did the right thing.
+
+  - Tear down and clean up any lingering artifacts.
+
+
 
 **Helpful Ruby methods**
 
