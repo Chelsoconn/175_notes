@@ -398,21 +398,9 @@ rbenv local 3.2.2
 
 - Developers use Heroku to deploy, manage, and scale modern apps. Our platform is elegant, flexible, and easy to use, offering developers the simplest path to getting their apps to market.
 
-1) Login on command Line:
+1) Make project a git repository
 
-   1) `heroku login -i`
-   2) chelseaaoconnor1@gmail.com 
-   3) d209fa36-8b94-49fb-a9a7-e15fafb5c51d
-
-2) OR login from website 
-
-   1) Chelseaaoconnor1@gmail.com	
-   2) Ck57320! 
-   3) Authenticator App
-
-3) Make project a git repository
-
-4) ```ruby
+2) ```ruby
    require "sinatra"
    require "sinatra/reloader" if development?
    require "tilt/erubis"
@@ -540,9 +528,12 @@ rbenv local 3.2.2
 
 **Testing Sinatra Applications**
 
-
-
-
+- Since Sinatra builds on top of the [Rack](http://chneukirchen.org/blog/archive/2007/02/introducing-rack.html) library, testing Sinatra applications can take advantage of the [Rack::Test](https://github.com/brynary/rack-test)library for testing Rack applications.
+- Write tests to prevent regression
+- Minitest is Ruby's default testing library (DSL)
+- **Test Suite:** this is the entire set of tests that accompanies your program or application. You can think of this as *all the tests* for a project.
+- **Test:** this describes a situation or context in which tests are run. For example, this test is about making sure you get an error message after trying to log in with the wrong password. A test can contain multiple assertions.
+- **Assertion:** this is the actual verification step to confirm that the data returned by your program or application is indeed what is expected. You make one or more assertions within a test.
 
 **Helpful Ruby methods**
 
