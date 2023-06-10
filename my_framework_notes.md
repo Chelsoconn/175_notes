@@ -209,11 +209,43 @@ Rack::Handler::WEBrick.run MyApp.new
 
 - Productivity tool meant to help developers speed up development by automating common tasks
 
+- In Gemfile 
+
+  - ```
+    source "https://rubygems.org"
+    
+    ruby '3.2.2'
+    
+    group :development do  #If you were using PUMA and want to use webrick
+      gem 'webrick'
+    end
+    
+    gem "sinatra"
+    gem "sinatra-contrib"
+    gem "erubis"
+    gem "rack-test"
+    gem "minitest"
+    gem "redcarpet"
+    gem "bcrypt"
+    gem "pg"
+    ```
+
+    
+
 - ```
   require "sinatra"
   require "sinatra/reloader"
   require "tilt/erubis"
   
+  configure do    #session is a hash - access through session[:key]
+  	enable :sessions
+  	set :session_secret, 'secret'
+      set :erb, :escape_html => true
+  end 
+  
+  configure do   #Escape user html
+    set :erb, :escape_html => true
+  end
   
   before do
     @contents = File.readlines("data/toc.txt")
@@ -282,7 +314,32 @@ Rack::Handler::WEBrick.run MyApp.new
     </form>
     ```
 
+- Header Links 
+
+  - In .erb file 
+  
+  - ```
+      <% content_for :header_links do %>
+        <a class="list" href="/lists">All lists</a>
+      <%end%>
+    ```
+  
+  - In layout.erb
+  
+  - ```
+            <%== yield_content :header_links %>
+    ```
+  
+    - The <%== disables auto escaping 
+  
+- Linking a page 
+
+  - ```
+    <a href="/lists/<%=params[:list_id]%>">Cancel</a>
+    ```
+  
     
+  
 
 **ERB Layouts**
 
@@ -336,3 +393,181 @@ rbenv local 3.2.2
 - *View helpers* are Ruby methods that are used to minimize the amount of Ruby code included in a view template. These methods are defined within a `helpers` block in Sinatra.
 - A user can be sent to a new location in response to a request with *redirection*. This is done in Sinatra using the `redirect` method. The redirection is accomplished by setting the `Location` header in the response. The client looks at the URL in the location header and sends out a new HTTP GET request for the associated resource, which in turn navigates the client to that new location.
 - The files in a project can be identified as either *server-side* or *client-side* code based on where they will be evaluated.
+
+**Heroku**
+
+- Developers use Heroku to deploy, manage, and scale modern apps. Our platform is elegant, flexible, and easy to use, offering developers the simplest path to getting their apps to market.
+
+1) Login on command Line:
+
+   1) `heroku login -i`
+   2) chelseaaoconnor1@gmail.com 
+   3) d209fa36-8b94-49fb-a9a7-e15fafb5c51d
+
+2) OR login from website 
+
+   1) Chelseaaoconnor1@gmail.com	
+   2) Ck57320! 
+   3) Authenticator App
+
+3) Make project a git repository
+
+4) ```ruby
+   require "sinatra"
+   require "sinatra/reloader" if development?
+   require "tilt/erubis"
+   require "sinatra/content_for"
+   ```
+
+​      This goes in main .rb file 
+
+5. Specify Ruby version in Gemfile 
+
+   1. `ruby "3.2.0"`
+      1. Run `bundle install`
+
+6. Add this to Gemfile to use PUMA as the web server
+
+   1. ```
+      group :production do
+        gem "puma"
+      end
+      ```
+
+   2. Run `bundle install`
+
+7. Create a `config.ru` file 
+
+   1. ```
+      require './todo'
+      run Sinatra::Application
+      ```
+
+8. Create a `Procfile`
+
+   1. `web: bundle exec puma -t 5:5 -p ${PORT:-3000} -e ${RACK_ENV:-development}`
+
+9. Test your `Procfile` locally 
+
+   In terminal: `bundle exec heroku local -p 5555`
+
+   Visit at [localhost:5000](http://localhost:5555/]
+
+   
+
+   10. `$ heroku apps:create ls-rb175-book-viewer` in terminal 
+   11. `$ git push heroku main` in terminal #or `master`
+
+
+
+**Security**
+
+- Is using POST as the HTTP method for a request more secure than GET? Why or why not?
+  - **No.** Any request sent as plain text, regardless of the HTTP method used, is equally vulnerable to being seen while in transit on the network.
+- How can a web application be secured so that any data being sent between the client and server can not be viewed by other parties?
+  - Serving the application over **HTTPS** is the only way to protect a user's data.
+
+**jQuery**
+
+- JavaScript code that is executed in the user's browser in addition to Ruby code that runs on the server. We will be using the [jQuery](http://jquery.com/) library in the client-side code
+
+- These go in the `public/javascripts/application.js` folder 
+
+- ```javascript
+  // public/javascripts/application.js
+  $(function() {
+  
+    $("form.delete").submit(function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+  
+      var ok = confirm("Are you sure? This cannot be undone!");
+      if (ok) {
+        var form = $(this);
+  
+        var request = $.ajax({
+          url: form.attr("action"),
+          method: form.attr("method")
+        });
+  
+        request.done(function(data, textStatus, jqXHR) {
+          if (jqXHR.status === 204) {
+            form.parent("li").remove();
+          } else if (jqXHR.status === 200) {
+            document.location = data;
+          }
+        });
+      }
+    });
+  
+  });
+  ```
+
+- ```ruby
+  # todo.rb
+  
+  # Delete a todo list
+  post "/lists/:id/destroy" do
+    id = params[:id].to_i
+    session[:lists].delete_at(id)
+    if env["HTTP_X_REQUESTED_WITH"] == "XMLHttpRequest"
+      "/lists"
+    else
+      session[:success] = "The list has been deleted."
+      redirect "/lists"
+    end
+  end
+  
+  ...
+  
+  # Delete a todo from a list
+  post "/lists/:list_id/todos/:id/destroy" do
+    @list_id = params[:list_id].to_i
+    @list = load_list(@list_id)
+  
+    todo_id = params[:id].to_i
+    @list[:todos].delete_at todo_id
+    if env["HTTP_X_REQUESTED_WITH"] == "XMLHttpRequest"
+      status 204
+    else
+      session[:success] = "The todo has been deleted."
+      redirect "/lists/#{@list_id}"
+    end
+  end
+  ```
+
+
+
+**Testing Sinatra Applications**
+
+
+
+
+
+**Helpful Ruby methods**
+
+- Get file names from directory 
+
+  - ```
+    Dir.children("files")  #files is the directory 
+    ```
+
+- Open and read files 
+
+  - ```
+      file = File.open("./files/#{params[:page]}")
+      @file_contents = file.readlines.map(&:chomp)
+    ```
+
+    * This returns an array that you can iterate through in the erb file 
+
+  - ```
+    get "/:filename" do
+      file_path = root + "/data/" + params[:filename]
+    
+      headers["Content-Type"] = "text/plain"
+      File.read(file_path)
+    end
+    ```
+
+​				* This doesn't use an erb file and sets the content-type to "text/plain"
