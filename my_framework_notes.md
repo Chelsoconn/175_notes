@@ -236,18 +236,19 @@ Rack::Handler::WEBrick.run MyApp.new
 
 - ```
   require "sinatra"
-  require "sinatra/reloader"
   require "tilt/erubis"
+  require "yaml"
   
-  configure do    #session is a hash - access through session[:key]
-  	enable :sessions
-  	set :session_secret, 'secret'
-      set :erb, :escape_html => true
-  end 
-  
-  configure do   #Escape user html
+  configure do  #session is a hash and we access through session[:key]
+    enable :sessions
+    set :session_secret, "secret"
     set :erb, :escape_html => true
   end
+  
+  configure(:development) do 
+    require "sinatra/reloader"
+    also_reload "database_persistence.rb" *if you have a database
+  end 
   
   before do
     @contents = File.readlines("data/toc.txt")
@@ -271,8 +272,21 @@ Rack::Handler::WEBrick.run MyApp.new
   not_found do
     redirect "/a/good/path"
   end
+  
+  post "/users/signin" do  #using yaml for signin yaml is a hash of users
+    cred = load_credentials 
+    session[:username] = params[:username]
+    session[:password] = params[:password]
+    if cred.key?(session[:username]) && cred[session[:username]] == session[:password]
+      session[:loggedin] = "Welcome!"
+      redirect "/"
+    end 
+    session[:loggedout] = "Incorrect Credentials"
+    redirect "/users/signin"
+  end 
+  
   ```
-
+  
 - **Run Sinatra App**
 
 `$ bundle exec ruby book_viewer.rb`
@@ -340,8 +354,79 @@ Rack::Handler::WEBrick.run MyApp.new
     <a href="/lists/<%=params[:list_id]%>">Cancel</a>
     ```
   
+- Button
+
+  - ```
+    <form action="/lists/<%=params[:list_id]%>/completeall" method="post">
+       <button class="check" type="submit">Complete All</button>
+    </form>
+    ```
+  
+- Form with text box 
+
+  - ```
+    <form action="/<%=params[:name]%>/edit" method="post">
+      <dl>
+        <dt>
+          <label for "Edit">Edit content of <%=params[:name]%>:</label>
+        </dt>
+        <dd>
+           <textarea input name="new_content" rows ="10" cols = "50" placeholder="Content can be edited now!" type="text" ></textarea>
+        </dd>
+      </dl>
+        <input type="submit" value="Save">
+        <a href="/">Cancel</a>
+    </form>
+    ```
     
   
+
+**Storing Passwords using Crypt**
+
+* We should never store passwords as plain text 
+
+* User passwords should always be stored after being *hashed*, which is a one-way operation that makes the original content of the password practically impossible to recover.  In order to compare a password provided by a user (say, in a `params` hash) with a hashed password, the raw password is hashed using the same algorithm. The resulting hashed value is then compared to the stored hashed value. If they match, then the original values of both hashes were the same.
+
+  1. Add `gem bcrypt` to Gemfile
+
+  2. run `bundle install`
+
+  3. `require bcrypt` in main file. 
+
+  4. ```
+     def valid_credentials?(username, password)
+       credentials = load_user_credentials
+     
+       if credentials.key?(username)
+         bcrypt_password = BCrypt::Password.new(credentials[username])
+         bcrypt_password == password
+       else
+         false
+       end
+     end
+     
+     ...
+     
+     post "/users/signin" do
+       username = params[:username]
+     
+       if valid_credentials?(username, params[:password])
+         session[:username] = username
+         session[:message] = "Welcome!"
+         redirect "/"
+       else
+         session[:message] = "Invalid credentials"
+         status 422
+         erb :signin
+       end
+     end
+     ```
+
+* *True or false:* Running the same password through `bcrypt` multiple times will result in the same hashed value every time.
+
+  * **False**. Because bcrypt autogenerates a salt when it hashes a value, hashing the same value multiple times will result in a new hashed value each time:
+
+
 
 **ERB Layouts**
 
@@ -426,27 +511,55 @@ rbenv local 3.2.2
 
    2. Run `bundle install`
 
-7. Create a `config.ru` file 
+7. `$ bundle lock --add-platform x86_64-linux` in terminal
+
+8. Create a `config.ru` file 
 
    1. ```
       require './todo'
       run Sinatra::Application
       ```
 
-8. Create a `Procfile`
+9. Create a `Procfile`
 
    1. `web: bundle exec puma -t 5:5 -p ${PORT:-3000} -e ${RACK_ENV:-development}`
 
-9. Test your `Procfile` locally 
+10. run `heroku login` in terminal and login to heroku
 
-   In terminal: `bundle exec heroku local -p 5555`
+11. Test your `Procfile` locally (will not work with pry gem)
 
-   Visit at [localhost:5000](http://localhost:5555/]
+    In terminal: `bundle exec heroku local -p 5555`
 
-   
+    Visit at [localhost:5000](http://localhost:5555/]
 
-   10. `$ heroku apps:create ls-rb175-book-viewer` in terminal 
-   11. `$ git push heroku main` in terminal #or `master`
+12. If adding a database:
+
+    1. Open database like this:
+
+       1. This code uses the `DATABASE_URL` environment variable to determine the database name when running on Heroku.
+
+    2. ```
+       class DatabasePersistence
+         def initialize(logger)
+           @logger = logger
+           @db = if Sinatra::Base.production?
+             PG.connect(ENV['DATABASE_URL'])
+           else
+             PG.connect(dbname: "todos")
+           end
+         end
+       ```
+
+
+13. `$ heroku apps:create ls-rb175-book-viewer` in terminal 
+14. ` $ heroku addons:create heroku-postgresql:mini -a database-todos-launch-cao` #database-todos-launch-cao app name 
+15. Make sure you have your database schema saved in a file called `schema.sql` in your main directory
+16. `$ heroku pg:psql -a database-todos-launch-cao < schema.sql`
+
+ -  If you need to set up your database manually:
+    -  `heroku pg:psql -a postgresql-asymmetrical-27376` or just `heroku pg:psql`
+
+13. `$ git push heroku main` in terminal #or `master`
 
 
 
@@ -587,6 +700,22 @@ class AppTest < Minitest::Test
     assert_equal "Hello, world!", last_response.body
   end
 end
+
+def session  #This allows you to access session in test through session[:key]
+  last_request.env["rack.session"]
+end  #ex/assert_equal "You have been signed out.", session[:message]
+
+def admin_session  #logs you in so you can test as user
+  { "rack.session" => { username: "admin" } }
+end
+
+...
+
+def test_editing_document
+  get "/changes.txt/edit", {}, admin_session
+
+  assert_equal 200, last_response.status
+end
 ```
 
 | Assertion                          | Description                                 |
@@ -634,6 +763,23 @@ end
     Dir.children("files")  #files is the directory 
     ```
 
+- `IO#getch`
+
+  - We add `require "io/console"` to the top of the ruby file 
+  
+  - This allows for one letter user input and immediately returns it 
+  
+  - ```
+    puts "This will remove all expenses. Are you sure? (y/n)"
+    response = $stdin.getch
+    ```
+  
+- Format a number to a certain decimal
+
+  - ```
+    sprintf('%.2f',3.145435]) => 3.14
+    ```
+
 - Open and read files 
 
   - ```
@@ -652,4 +798,223 @@ end
     end
     ```
 
-​				* This doesn't use an erb file and sets the content-type to "text/plain"
+   * This doesn't use an erb file and sets the content-type to "text/plain"
+
+   * Edit files 
+
+     * ```
+         File.write("./files/#{params[:name]}", params[:new_content]) (path, new_content)
+       ```
+
+
+  - Connect to a PRY session
+    - in irb `require 'pry'`
+    - `Pry.start`
+
+**Connect to SQL from Ruby**
+
+- `gem install pg`(add to gem file)
+
+- Connect from terminal
+
+  - ```
+    $ irb
+    > require "pg"
+    > db = PG.connect(dbname: "your_db_name")  
+    <PG: : Connection.......>
+    ```
+
+    * db is a connection object 
+
+  - Send sql query to server 
+
+    - ```
+      result = db.exec "SELECT * FROM films;"
+      result.values #returns array of arrays
+      ```
+
+      | Command                                       | What it does                                                 |
+      | :-------------------------------------------- | :----------------------------------------------------------- |
+      | `PG.connect(dbname: "a_database")`            | Create a new `PG::Connection` object                         |
+      | `connection.exec("SELECT * FROM table_name")` | execute a SQL query and return a `PG::Result`object          |
+      | `result.values`                               | Returns an Array of Arrays containing values for each row in `result` |
+      | `result.fields`                               | Returns the names of columns as an Array of Strings          |
+      | `result.ntuples`                              | Returns the number of rows in `result`                       |
+      | `result.each(&block)`                         | Yields a Hash of column names and values to the block for each row in `result` |
+      | `result.each_row(&block)`                     | Yields an Array of values to the block for each row in `result` |
+      | `result[index]`                               | Returns a Hash of values for row at `index` in `result`      |
+      | `result.field_values(column)`                 | Returns an Array of values for `column`, one for each row in `result` |
+      | `result.column_values(index)`                 | Returns an Array of values for column at `index`, one for each row in `result` |
+
+**Set up a project with sql**
+
+Follow these steps to setup a new project:
+
+1. Create a directory on your computer for the project.
+
+2. Create a `Gemfile` within that directory, and within it, add the `pg` gem as a dependency.
+
+3. Run `bundle install` to install the pg gem.
+
+4. Create a file called `expense` to contain the application.
+
+5. Add `#! /usr/bin/env ruby` to the top of `expense`. This is known as a "hash-bang", and it allows a shell program to execute the script using the Ruby interpreter.
+
+6. Add the execute permission to the file `expense` with the terminal command `chmod +x expense`.
+
+7. Require the pg gem within `expense` (but after the hash-bang).
+
+8. Add code to `expense` to print out "Hello World".
+
+9. Make sure that `expense` can be successfully run by typing `./expense` at the command prompt. You should see something like this:
+
+10. ```
+    $ ./expense
+    Hello World
+    ```
+
+11. If this command does not work, try running: `bunde exec ./expense`
+
+    1. Alternatively, you can add `require 'bundler/setup'` to your `expense.rb` file.
+
+12. Access the arguments passed in through `ARGV` where ARGV is an array of arguments
+
+    1. ```
+       command = ARGV.first
+       if command == "list"
+         list_expenses
+       else
+         display_help
+       end
+       ```
+
+13. Using interpolated values with SQL statements 
+
+    ```
+    def add_expense(second, third)
+      CONNECTION.exec("INSERT INTO expenses (created_on, amount, memo) 
+      VALUES (NOW(), #{second}, '#{third}')")
+    end 
+    ```
+
+14. Making sure mallicious code is not inserted into SQL statements 
+
+    1. ```
+       #USE connection.exec_params("SELECT position($1 in $2)", ["t", "test"]).values 
+       
+       =>[["1"]]
+       ```
+
+    2. The $1 acts as the first placeholder and the $2 acts as the second
+
+    3. The arguments are given as an array in the second argument 
+
+    4. What happens if you use two placeholders in the first argument to `PG::Connection#exec_params`, but only one in the Array of values used to fill in those placeholders?
+
+       1. (irb):3:in `exec_params': **ERROR: bind message supplies 1 parameters, but prepared statement "" requires 2 (****PG::ProtocolViolation**) 
+
+15. Set up tables in the database if they are not there
+
+    1. ```
+       #In initialize method 
+       
+         def initialize
+           @connection = PG.connect(dbname: "expenses") 
+           setup_schema
+         end
+         
+       #Set up a private method to setup tables 
+         def setup_schema
+           sql = "SELECT COUNT(*) FROM information_schema.tables WHERE    table_schema = 'public' AND table_name = 'expenses'"
+           result = @connection.exec(sql)
+           if result[0]["count"] == "0"
+             @connection.exec <<~SQL 
+               CREATE TABLE expenses (
+                 id serial PRIMARY KEY,
+                 amount numeric(6,2) NOT NULL CHECK (amount >= 0.01),
+                 memo text NOT NULL,
+                 created_on date NOT NULL
+               );
+             SQL
+           end 
+         end 
+       ```
+
+    2. `"SELECT COUNT(*) FROM information_schema.tables WHERE    table_schema = 'public' AND table_name = 'expenses'"`
+
+       1. This is a method that returns "1" if the table is present and "0" if not 
+
+
+
+
+
+**Create an app with a database** 
+
+1) Follow Sinatra instructions 
+
+2) Add `gem "pg"` to Gemfile (postgres adapter gem for Ruby)
+
+   1) `bundle install`
+
+3) Create a `database_persistence.rb` file in directory with `DatabasePersistence` class
+
+4) Add `require_relative "database_persistence"`to main Ruby file
+
+5) Require "pg" gem in `database_persistence.rb` file 
+
+   1) `require "pg"`
+
+6) in`database_persistence.rb` file create a DatabasePersistence class that has an initialize method that connects to the database:
+
+   1) ```
+      class DatabasePersistence
+        def initialize(logger)
+          @logger = logger
+          @db = PG.connect(dbname: "todos")
+        end
+      ```
+
+7) Add a `before` block to main Ruby file 
+
+   1) ```
+      before do
+        @storage = DatabasePersistence.new(logger) #logger provided by Sinatra
+      end
+      ```
+
+   2) We can now use this instance variable and call methods defined within DatabasePersistence within the main app
+
+8. Ways to troubleshoot: 
+
+   1. Connect to db from irb
+
+      1. ```
+         $ require "pg"
+         $ db = PG.connect(dbname: "todos")
+         $ sql = "SELECT * FROM lists"
+         $ result = db.exec(sql)
+         $ result.values 
+         ```
+
+      2. In `database_persistence.rb` file you can put a `puts` statement in the method which will show up in the terminal as you run your program
+
+         1. ```
+              def find_list(id)
+                sql = "SELECT * FROM lists WHERE id = $1"
+                result = @db.exec_params(sql, [id]) 
+                puts "#{sql}: #{id}"   #This will execute in terminal
+                tuple = result.first
+                {id: tuple["id"], name: tuple["name"], todos: [] }
+              end
+            ```
+
+9. Try to abstract a `query` method in` database_persistence.rb`
+
+   1. ```
+        def query(statement, *params) #*params passes an array
+          @logger.info "#{statement}: #{params}"
+          @db.exec_params(statement, params)
+        end 
+      ```
+
+      
