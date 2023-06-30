@@ -1017,4 +1017,37 @@ Follow these steps to setup a new project:
         end 
       ```
 
+
+
+
+**Optimization**
+
+* How N+1 queries are the result of performing an additional query for each element in a collection
+* How to move business logic from Ruby into the database by adding to a query's select list
+* How making database interactions more efficient often involves making SQL queries more specialized
+
+
+
+
+
+
+
+**Zip File (.zip)**
+
+1) Used for storage and compression
+
+2) Maintain original directory arrangement 
+
+3) On Macs
+
+   1) Archive Utility
+
+   2) Open finder window and navigate to the directory where you have your files
+
+   3) Select a group of files to zip
+
+   4) Control-click on the folder and press `Compress "my-app"`
+
+   5) You should now see a .zip file with the same name 
+
       
